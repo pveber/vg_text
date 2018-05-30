@@ -12,7 +12,14 @@ let str = Printf.sprintf
 let otfm_err_str err =
   Format.fprintf Format.str_formatter "%a" Otfm.pp_error err;
   Format.flush_str_formatter ()
+    (* let ( >>= ) x f = match x with
+     *   | Error e -> Error (str "%s: %s" fn (otfm_err_str e))
+     *   | Ok v -> f v
+     * in *)
 
+let ( >>= ) x f = match x with
+  | Error _ as e -> e
+  | Ok v -> f v
 
 (* Font information *)
 
@@ -22,12 +29,15 @@ module Cmap = Gmap           (* uchar maps *)
 
 type font_info = {
   font_name : string ;
-  font : string;                                     (* The font bytes. *)
+  raw : string;                                      (* The font bytes. *)
   cmap : int Cmap.t;           (* Maps unicode scalar values to glyphs. *)
   advs : int Gmap.t;             (* Maps glyph to advances in em space. *)
   kern : int Gmap.t Gmap.t;    (* Maps glyph pairs to kern adjustement. *)
   units_per_em : int;                        (* Number of units per em. *)
 }
+
+let font_name fi = fi.font_name
+let font_raw fi = fi.raw
 
 let add_adv acc g adv _ = Gmap.add g adv acc
 let add_cmap acc kind (u0, u1) g =
@@ -133,27 +143,36 @@ let string_of_file inf =
       assert false
     with
     | Exit -> close ic; Ok (Buffer.contents b)
-    | Failure _ -> close ic; Error (str "%s: input file too large" inf)
-    | Sys_error e -> close ic; Error (str "%s: %s" inf e)
+    | Failure _ -> close ic; Error (`Read_error (str "%s: input file too large" inf))
+    | Sys_error e -> close ic; Error (`Read_error (str "%s: %s" inf e))
   with
-  | Sys_error e -> Error (str "%s: %s" inf e)
+  | Sys_error e -> Error (`Read_error (str "%s: %s" inf e))
 
 let load_otf fn =
   match string_of_file fn with
   | Error _ as e -> e
-  | Ok font ->
-    let ( >>= ) x f = match x with
-      | Error e -> Error (str "%s: %s" fn (otfm_err_str e))
-      | Ok v -> f v
+  | Ok raw ->
+    let d = Otfm.decoder (`String raw) in
+    let r =
+      Otfm.postscript_name d                      >>= fun font_name ->
+      Otfm.head d                                 >>= fun head ->
+      Otfm.cmap d add_cmap Cmap.empty             >>= fun (_, cmap) ->
+      Otfm.hmtx d add_adv Gmap.empty              >>= fun advs ->
+      Otfm.kern d add_ktable add_kpair Gmap.empty >>= fun kern ->
+      let font_name = match font_name with None -> "Unknown" | Some n -> n in
+      let units_per_em = head.Otfm.head_units_per_em in
+      Ok { font_name ; raw; cmap; advs; kern; units_per_em }
     in
-    let d = Otfm.decoder (`String font) in
-    Otfm.postscript_name d                      >>= fun font_name ->
-    Otfm.head d                                 >>= fun head ->
-    Otfm.cmap d add_cmap Cmap.empty             >>= fun (_, cmap) ->
-    Otfm.hmtx d add_adv Gmap.empty              >>= fun advs ->
-    Otfm.kern d add_ktable add_kpair Gmap.empty >>= fun kern ->
-    let font_name = match font_name with None -> "Unknown" | Some n -> n in
-    let units_per_em = head.Otfm.head_units_per_em in
-    Ok { font_name ; font; cmap; advs; kern; units_per_em }
+    (r : (_, Otfm.error) result :> (_, [> Otfm.error]) result)
+
+let to_glyphs fi text =
+  let f acc _ = function
+    | `Malformed _ -> get_glyph fi (Uchar.to_int Uutf.u_rep) :: acc
+    | `Uchar u ->
+      let g = get_glyph fi (Uchar.to_int u) in
+      g :: acc
+  in
+  Uutf.String.fold_utf_8 f [] text
+  |> List.rev
 
 let text_size glyphs = assert false
