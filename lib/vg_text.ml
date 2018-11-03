@@ -5,17 +5,12 @@
   ---------------------------------------------------------------------------*)
 
 open Gg
-open Vg
 open Result
 
 let str = Printf.sprintf
-let otfm_err_str err =
-  Format.fprintf Format.str_formatter "%a" Otfm.pp_error err;
-  Format.flush_str_formatter ()
-    (* let ( >>= ) x f = match x with
-     *   | Error e -> Error (str "%s: %s" fn (otfm_err_str e))
-     *   | Ok v -> f v
-     * in *)
+(* let otfm_err_str err = *)
+(*   Format.fprintf Format.str_formatter "%a" Otfm.pp_error err; *)
+(*   Format.flush_str_formatter () *)
 
 let ( >>= ) x f = match x with
   | Error _ as e -> e
@@ -63,29 +58,6 @@ let get_adv fi g = try Gmap.find g fi.advs with Not_found -> 0
 let get_kern fi g g' =
   try Gmap.find g' (Gmap.find g fi.kern) with Not_found -> 0
 
-(* Text layout *)
-
-let fixed_layout size text =
-  let units_per_em = 1000. in
-  let add_adv acc _ = function
-  | `Malformed _ -> acc | `Uchar _ -> acc + 600 (* Courier's advance *)
-  in
-  let len = size *. (float (Uutf.String.fold_utf_8 add_adv 0 text)) in
-  [], [], (len /. units_per_em)
-
-let otf_layout fi size text =
-  let u_to_em = float fi.units_per_em in
-  let rec add_glyph (gs, advs, len as acc) i = function
-  | `Malformed _ -> add_glyph acc i (`Uchar Uutf.u_rep)
-  | `Uchar u ->
-      let g = get_glyph fi (Uchar.to_int u) in
-      let adv = get_adv fi g in
-      let sadv = V2.v ((size *. (float adv)) /. u_to_em) 0. in
-      (g :: gs, sadv :: advs, len + adv)
-  in
-  let gs, advs, len = Uutf.String.fold_utf_8 add_glyph ([], [], 0) text in
-  gs, advs, ((size *. (float len)) /. u_to_em)
-
 let otf_kern_layout fi size text =
   let u_to_em = float fi.units_per_em in
   let rec add (prev, gs, advs, kerns as acc) i = function
@@ -107,25 +79,6 @@ let otf_kern_layout fi size text =
   let _, gs, advs, kerns = Uutf.String.fold_utf_8 add (-1, [], [], []) text in
   let advs, len = advances [] 0 (List.rev advs) (List.rev kerns) in
   gs, advs, ((size *. float len) /. u_to_em)
-
-(* Text rendering *)
-
-let renderable (fname, info) size kern text =
-  let glyphs_rev, advances_rev, len = match info with
-  | None -> fixed_layout size text
-  | Some info when kern -> otf_kern_layout info size text
-  | Some info -> otf_layout info size text
-  in
-  let glyphs, advances = List.rev glyphs_rev, List.rev advances_rev in
-  let font = { Font.name = fname; slant = `Normal; weight = `W400; size } in
-  let i =
-    I.const (Color.black) >>
-    I.cut_glyphs ~text ~advances font glyphs >>
-    I.move V2.(0.5 * (v size size))
-  in
-  let size = Size2.v (len +. size) (2. *. size) in
-  let view = Box2.v P2.o size in
-  `Image (size, view, i)
 
 let string_of_file inf =
   try
@@ -165,7 +118,7 @@ let load_otf fn =
     in
     (r : (_, Otfm.error) result :> (_, [> Otfm.error]) result)
 
-let to_glyphs fi text =
+let glyphs_of_string fi text =
   let f acc _ = function
     | `Malformed _ -> get_glyph fi (Uchar.to_int Uutf.u_rep) :: acc
     | `Uchar u ->
@@ -175,4 +128,6 @@ let to_glyphs fi text =
   Uutf.String.fold_utf_8 f [] text
   |> List.rev
 
-let text_size glyphs = assert false
+let text_length fi ~font_size text =
+  let _glyphs_rev, _advances_rev, len = otf_kern_layout fi font_size text in
+  len

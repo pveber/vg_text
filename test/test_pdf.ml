@@ -29,10 +29,10 @@ let echo font size text =
                slant = `Normal;
                weight = `W400;
                size } in
-  let glyphs = Vg_text.to_glyphs font_info text in
+  let glyphs = Vg_text.glyphs_of_string font_info text in
   let i =
-    I.const (Color.black) >>
-    I.cut_glyphs (* ~text ~advances*) font glyphs >>
+    I.const (Color.black) |>
+    I.cut_glyphs (* ~text ~advances*) font glyphs |>
     I.move V2.(0.5 * (v size size))
   in
   let len = 200. in
