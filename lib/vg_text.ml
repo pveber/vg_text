@@ -28,11 +28,15 @@ type font_info = {
   cmap : int Cmap.t;           (* Maps unicode scalar values to glyphs. *)
   advs : int Gmap.t;             (* Maps glyph to advances in em space. *)
   kern : int Gmap.t Gmap.t;    (* Maps glyph pairs to kern adjustement. *)
+  hhea : Otfm.hhea ;
   units_per_em : int;                        (* Number of units per em. *)
 }
 
 let font_name fi = fi.font_name
 let font_raw fi = fi.raw
+
+let font_ascender fi = float fi.hhea.hhea_ascender /. float fi.units_per_em
+let font_descender fi = float fi.hhea.hhea_descender /. float fi.units_per_em
 
 let add_adv acc g adv _ = Gmap.add g adv acc
 let add_cmap acc kind (u0, u1) g =
@@ -112,9 +116,10 @@ let load_otf fn =
       Otfm.cmap d add_cmap Cmap.empty             >>= fun (_, cmap) ->
       Otfm.hmtx d add_adv Gmap.empty              >>= fun advs ->
       Otfm.kern d add_ktable add_kpair Gmap.empty >>= fun kern ->
+      Otfm.hhea d                                 >>= fun hhea ->
       let font_name = match font_name with None -> "Unknown" | Some n -> n in
       let units_per_em = head.Otfm.head_units_per_em in
-      Ok { font_name ; raw; cmap; advs; kern; units_per_em }
+      Ok { font_name ; raw; cmap; advs; kern; hhea ; units_per_em }
     in
     (r : (_, Otfm.error) result :> (_, [> Otfm.error]) result)
 
