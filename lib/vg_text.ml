@@ -58,7 +58,7 @@ let get_adv fi g = try Gmap.find g fi.advs with Not_found -> 0
 let get_kern fi g g' =
   try Gmap.find g' (Gmap.find g fi.kern) with Not_found -> 0
 
-let otf_kern_layout fi size text =
+let layout fi ~font_size:size text =
   let u_to_em = float fi.units_per_em in
   let rec add (prev, gs, advs, kerns as acc) i = function
   | `Malformed _ -> add acc i (`Uchar Uutf.u_rep)
@@ -78,7 +78,7 @@ let otf_kern_layout fi size text =
   in
   let _, gs, advs, kerns = Uutf.String.fold_utf_8 add (-1, [], [], []) text in
   let advs, len = advances [] 0 (List.rev advs) (List.rev kerns) in
-  gs, advs, ((size *. float len) /. u_to_em)
+  List.rev gs, List.rev advs, ((size *. float len) /. u_to_em)
 
 let string_of_file inf =
   try
@@ -129,5 +129,5 @@ let glyphs_of_string fi text =
   |> List.rev
 
 let text_length fi ~font_size text =
-  let _glyphs_rev, _advances_rev, len = otf_kern_layout fi font_size text in
+  let _glyphs_rev, _advances_rev, len = layout fi ~font_size text in
   len
