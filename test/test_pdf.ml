@@ -29,14 +29,14 @@ let echo font size text =
                slant = `Normal;
                weight = `W400;
                size } in
-  let glyphs = Vg_text.glyphs_of_string font_info text in
+  (* let glyphs = Vg_text.glyphs_of_string font_info text in *)
+  let glyphs, advances, len = Vg_text.layout font_info ~font_size:size text in
   let i =
     I.const (Color.black) |>
-    I.cut_glyphs (* ~text ~advances*) font glyphs |>
-    I.move V2.(0.5 * (v size size))
+    I.cut_glyphs ~text ~advances font glyphs |>
+    I.move V2.(0.5 * (v 0. size))
   in
-  let len = 200. in
-  let size = Size2.v (len +. size) (2. *. size) in
+  let size = Size2.v len (2. *. size) in
   let view = Box2.v P2.o size in
   render_pdf font_info (`Image (size, view, i))
 
