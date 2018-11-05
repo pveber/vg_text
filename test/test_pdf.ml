@@ -1,3 +1,9 @@
+(* code adapted from vecho.ml in vg library *)
+(*---------------------------------------------------------------------------
+   Copyright (c) 2013 Daniel C. Bünzli. All rights reserved.
+   Distributed under the ISC license, see terms at the end of the file.
+  ---------------------------------------------------------------------------*)
+
 open Gg
 open Vg
 
