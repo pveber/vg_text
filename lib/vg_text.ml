@@ -152,4 +152,4 @@ let cut ?(col = Color.black) ?(size = 12.) font text =
     Vg.I.const col |>
     Vg.I.cut_glyphs ~text ~advances vg_font glyphs
   in
-  i, Size2.v width height
+  i, Box2.v (V2.v 0. base) (Size2.v width height)

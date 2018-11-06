@@ -31,11 +31,8 @@ let render_pdf font_info renderable =
 
 let echo font size text =
   Vg_text.Font.load font >>= fun font ->
-  let descender = size *. Vg_text.Font.descender font in
   let i, bbox = Vg_text.cut ~size font text in
-  let i = I.move V2.(v 0. (-. descender)) i in
-  let view = Box2.v P2.o bbox in
-  render_pdf font (`Image (bbox, view, i))
+  render_pdf font (`Image (Box2.size bbox, bbox, i))
 
 let exec = Filename.basename Sys.executable_name
 

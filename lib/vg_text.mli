@@ -21,4 +21,4 @@ val cut :
   ?size:float ->
   Font.t ->
   string ->
-  image * size2
+  image * box2
