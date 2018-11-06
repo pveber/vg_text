@@ -1,17 +1,24 @@
 open Gg
 open Vg
 
-type font_info
+module Font : sig
+  type t
 
-val font_name : font_info -> string
-val font_raw : font_info -> string
-val font_ascender : font_info -> float
-val font_descender : font_info -> float
+  val name : t -> string
+  val data : t -> string
+  val ascender : t -> float
+  val descender : t -> float
 
-val load_otf : string -> (font_info,
-                          [> Otfm.error | `Read_error of string]) result
+  val load : string -> (t,
+                        [> Otfm.error | `Read_error of string]) result
+end
 
-val glyphs_of_string : font_info -> string -> glyph list
-val layout : font_info -> font_size:float -> string -> int list * v2 list * float
-val text_length : font_info -> font_size:float -> string -> float
-
+val glyphs_of_string : Font.t -> string -> glyph list
+val layout : Font.t -> font_size:float -> string -> int list * v2 list * float
+val text_length : Font.t -> font_size:float -> string -> float
+val cut :
+  ?col:Color.t ->
+  ?size:float ->
+  Font.t ->
+  string ->
+  image * size2

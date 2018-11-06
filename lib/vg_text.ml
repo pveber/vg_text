@@ -22,48 +22,90 @@ module Int = struct type t = Vg.glyph let compare = compare end
 module Gmap = Map.Make (Int) (* glyph maps *)
 module Cmap = Gmap           (* uchar maps *)
 
-type font_info = {
-  font_name : string ;
-  raw : string;                                      (* The font bytes. *)
-  cmap : int Cmap.t;           (* Maps unicode scalar values to glyphs. *)
-  advs : int Gmap.t;             (* Maps glyph to advances in em space. *)
-  kern : int Gmap.t Gmap.t;    (* Maps glyph pairs to kern adjustement. *)
-  hhea : Otfm.hhea ;
-  units_per_em : int;                        (* Number of units per em. *)
-}
+module Font = struct
+  type t = {
+    font_name : string ;
+    raw : string;                                      (* The font bytes. *)
+    cmap : int Cmap.t;           (* Maps unicode scalar values to glyphs. *)
+    advs : int Gmap.t;             (* Maps glyph to advances in em space. *)
+    kern : int Gmap.t Gmap.t;    (* Maps glyph pairs to kern adjustement. *)
+    hhea : Otfm.hhea ;
+    units_per_em : int;                        (* Number of units per em. *)
+  }
 
-let font_name fi = fi.font_name
-let font_raw fi = fi.raw
+  let name fi = fi.font_name
+  let data fi = fi.raw
 
-let font_ascender fi = float fi.hhea.hhea_ascender /. float fi.units_per_em
-let font_descender fi = float fi.hhea.hhea_descender /. float fi.units_per_em
+  let ascender fi = float fi.hhea.hhea_ascender /. float fi.units_per_em
+  let descender fi = float fi.hhea.hhea_descender /. float fi.units_per_em
 
-let add_adv acc g adv _ = Gmap.add g adv acc
-let add_cmap acc kind (u0, u1) g =
-  let acc = ref acc in
-  begin match kind with
-  | `Glyph_range ->
-      for i = 0 to (u1 - u0) do acc := Cmap.add (u0 + i) (g + i) !acc done;
-  | `Glyph ->
-      for u = u0 to u1 do acc := Cmap.add u g !acc done
-  end;
-  !acc
 
-let add_ktable acc i =
-  (if i.Otfm.kern_dir = `H && i.Otfm.kern_kind = `Kern then `Fold else `Skip),
-  acc
+  let string_of_file inf =
+    try
+      let ic = if inf = "-" then stdin else open_in_bin inf in
+      let close ic = if inf <> "-" then close_in ic else () in
+      let buf_size = 65536 in
+      let b = Buffer.create buf_size in
+      let s = Bytes.create buf_size in
+      try
+        while true do
+          let c = input ic s 0 buf_size in
+          if c = 0 then raise Exit else
+            Buffer.add_subbytes b s 0 c
+        done;
+        assert false
+      with
+      | Exit -> close ic; Ok (Buffer.contents b)
+      | Failure _ -> close ic; Error (`Read_error (str "%s: input file too large" inf))
+      | Sys_error e -> close ic; Error (`Read_error (str "%s: %s" inf e))
+    with
+    | Sys_error e -> Error (`Read_error (str "%s: %s" inf e))
 
-let add_kpair acc g0 g1 kv =
-  let m = try Gmap.find g0 acc with Not_found -> Gmap.empty in
-  Gmap.add g0 (Gmap.add g1 kv m) acc
+  let add_adv acc g adv _ = Gmap.add g adv acc
+  let add_cmap acc kind (u0, u1) g =
+    let acc = ref acc in
+    begin match kind with
+      | `Glyph_range ->
+        for i = 0 to (u1 - u0) do acc := Cmap.add (u0 + i) (g + i) !acc done;
+      | `Glyph ->
+        for u = u0 to u1 do acc := Cmap.add u g !acc done
+    end;
+    !acc
 
-let get_glyph fi g = try Gmap.find g fi.cmap with Not_found -> 0
-let get_adv fi g = try Gmap.find g fi.advs with Not_found -> 0
+  let add_ktable acc i =
+    (if i.Otfm.kern_dir = `H && i.Otfm.kern_kind = `Kern then `Fold else `Skip),
+    acc
+
+  let add_kpair acc g0 g1 kv =
+    let m = try Gmap.find g0 acc with Not_found -> Gmap.empty in
+    Gmap.add g0 (Gmap.add g1 kv m) acc
+
+  let load fn =
+    match string_of_file fn with
+    | Error _ as e -> e
+    | Ok raw ->
+      let d = Otfm.decoder (`String raw) in
+      let r =
+        Otfm.postscript_name d                      >>= fun font_name ->
+        Otfm.head d                                 >>= fun head ->
+        Otfm.cmap d add_cmap Cmap.empty             >>= fun (_, cmap) ->
+        Otfm.hmtx d add_adv Gmap.empty              >>= fun advs ->
+        Otfm.kern d add_ktable add_kpair Gmap.empty >>= fun kern ->
+        Otfm.hhea d                                 >>= fun hhea ->
+        let font_name = match font_name with None -> "Unknown" | Some n -> n in
+        let units_per_em = head.Otfm.head_units_per_em in
+        Ok { font_name ; raw; cmap; advs; kern; hhea ; units_per_em }
+      in
+      (r : (_, Otfm.error) result :> (_, [> Otfm.error]) result)
+end
+
+let get_glyph fi g = try Gmap.find g fi.Font.cmap with Not_found -> 0
+let get_adv fi g = try Gmap.find g fi.Font.advs with Not_found -> 0
 let get_kern fi g g' =
-  try Gmap.find g' (Gmap.find g fi.kern) with Not_found -> 0
+  try Gmap.find g' (Gmap.find g fi.Font.kern) with Not_found -> 0
 
 let layout fi ~font_size:size text =
-  let u_to_em = float fi.units_per_em in
+  let u_to_em = float fi.Font.units_per_em in
   let rec add (prev, gs, advs, kerns as acc) i = function
   | `Malformed _ -> add acc i (`Uchar Uutf.u_rep)
   | `Uchar u ->
@@ -84,45 +126,6 @@ let layout fi ~font_size:size text =
   let advs, len = advances [] 0 (List.rev advs) (List.rev kerns) in
   List.rev gs, List.rev advs, ((size *. float len) /. u_to_em)
 
-let string_of_file inf =
-  try
-    let ic = if inf = "-" then stdin else open_in_bin inf in
-    let close ic = if inf <> "-" then close_in ic else () in
-    let buf_size = 65536 in
-    let b = Buffer.create buf_size in
-    let s = Bytes.create buf_size in
-    try
-      while true do
-        let c = input ic s 0 buf_size in
-        if c = 0 then raise Exit else
-        Buffer.add_subbytes b s 0 c
-      done;
-      assert false
-    with
-    | Exit -> close ic; Ok (Buffer.contents b)
-    | Failure _ -> close ic; Error (`Read_error (str "%s: input file too large" inf))
-    | Sys_error e -> close ic; Error (`Read_error (str "%s: %s" inf e))
-  with
-  | Sys_error e -> Error (`Read_error (str "%s: %s" inf e))
-
-let load_otf fn =
-  match string_of_file fn with
-  | Error _ as e -> e
-  | Ok raw ->
-    let d = Otfm.decoder (`String raw) in
-    let r =
-      Otfm.postscript_name d                      >>= fun font_name ->
-      Otfm.head d                                 >>= fun head ->
-      Otfm.cmap d add_cmap Cmap.empty             >>= fun (_, cmap) ->
-      Otfm.hmtx d add_adv Gmap.empty              >>= fun advs ->
-      Otfm.kern d add_ktable add_kpair Gmap.empty >>= fun kern ->
-      Otfm.hhea d                                 >>= fun hhea ->
-      let font_name = match font_name with None -> "Unknown" | Some n -> n in
-      let units_per_em = head.Otfm.head_units_per_em in
-      Ok { font_name ; raw; cmap; advs; kern; hhea ; units_per_em }
-    in
-    (r : (_, Otfm.error) result :> (_, [> Otfm.error]) result)
-
 let glyphs_of_string fi text =
   let f acc _ = function
     | `Malformed _ -> get_glyph fi (Uchar.to_int Uutf.u_rep) :: acc
@@ -136,3 +139,17 @@ let glyphs_of_string fi text =
 let text_length fi ~font_size text =
   let _glyphs_rev, _advances_rev, len = layout fi ~font_size text in
   len
+
+let cut ?(col = Color.black) ?(size = 12.) font text =
+  let vg_font = { Vg.Font.name = Font.name font ;
+                  slant = `Normal;
+                  weight = `W400;
+                  size } in
+  let base = size *. Font.descender font in
+  let height = size *. Font.ascender font -. base in
+  let glyphs, advances, width = layout font ~font_size:size text in
+  let i =
+    Vg.I.const col |>
+    Vg.I.cut_glyphs ~text ~advances vg_font glyphs
+  in
+  i, Size2.v width height

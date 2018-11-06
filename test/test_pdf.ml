@@ -16,10 +16,10 @@ let ( >>= ) x f = match x with
   | Ok v -> f v
 
 let render_pdf font_info renderable =
-  let r = Vgr_pdf.otf_font (Vg_text.font_raw font_info) in
+  let r = Vgr_pdf.otf_font (Vg_text.Font.data font_info) in
   (r : (_, Otfm.error) result :> (_, [> Otfm.error]) result) >>= fun otf_font ->
   let font f =
-    if Vg_text.font_name font_info = f.Font.name then
+    if Vg_text.Font.name font_info = f.Font.name then
       otf_font
     else
       Vgr_pdf.font f
@@ -30,22 +30,12 @@ let render_pdf font_info renderable =
   Ok ()
 
 let echo font size text =
-  Vg_text.load_otf font >>= fun font_info ->
-  let font = { Font.name = Vg_text.font_name font_info;
-               slant = `Normal;
-               weight = `W400;
-               size } in
-  let base = size *. Vg_text.(font_descender font_info) in
-  let height = size *. Vg_text.(font_ascender font_info) -. base in
-  let glyphs, advances, width = Vg_text.layout font_info ~font_size:size text in
-  let i =
-    I.const (Color.black) |>
-    I.cut_glyphs ~text ~advances font glyphs |>
-    I.move V2.(v 0. (-. base))
-  in
-  let size = Size2.v width height in
-  let view = Box2.v P2.o size in
-  render_pdf font_info (`Image (size, view, i))
+  Vg_text.Font.load font >>= fun font ->
+  let descender = size *. Vg_text.Font.descender font in
+  let i, bbox = Vg_text.cut ~size font text in
+  let i = I.move V2.(v 0. (-. descender)) i in
+  let view = Box2.v P2.o bbox in
+  render_pdf font (`Image (bbox, view, i))
 
 let exec = Filename.basename Sys.executable_name
 
