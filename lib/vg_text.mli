@@ -13,12 +13,20 @@ module Font : sig
                         [> Otfm.error | `Read_error of string]) result
 end
 
-val glyphs_of_string : Font.t -> string -> glyph list
-val layout : Font.t -> font_size:float -> string -> int list * v2 list * float
-val text_length : Font.t -> font_size:float -> string -> float
+(** [cut ?col ?size font text] returns an image displaying [text] with
+   color [col] and size [size] using font [font], as well as a
+   bounding box for the text in the image. The actual bounding box is
+   driver-dependant but the result of this function should provide a
+   reasonable appromixation. *)
 val cut :
   ?col:Color.t ->
   ?size:float ->
   Font.t ->
   string ->
   image * box2
+
+(** {5 Low-level functions} *)
+val glyphs_of_string : Font.t -> string -> glyph list
+val layout : Font.t -> font_size:float -> string -> int list * v2 list * float
+val text_length : Font.t -> font_size:float -> string -> float
+
