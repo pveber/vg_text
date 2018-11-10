@@ -16,7 +16,7 @@ end
 (** [cut ?col ?size font text] returns an image displaying [text] with
    color [col] and size [size] using font [font], as well as a
    bounding box for the text in the image. The actual bounding box is
-   driver-dependant but the result of this function should provide a
+   driver-dependent but the result of this function should provide a
    reasonable appromixation. *)
 val cut :
   ?col:Color.t ->
