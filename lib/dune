@@ -1,5 +1,5 @@
 (library
- ((name        vg_text)
-  (public_name vg_text)
-  (synopsis  "Toy text API for vg")
-  (libraries (gg otfm vg))))
+ (name        vg_text)
+ (public_name vg_text)
+ (synopsis  "Toy text API for vg")
+ (libraries gg otfm vg))

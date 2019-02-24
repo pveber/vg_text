@@ -1,4 +1,4 @@
 (executable
- ((name        test_pdf)
-  (modules    (Test_pdf))
-  (libraries  (vg_text vg.pdf))))
+ (name       test_pdf)
+ (modules    Test_pdf)
+ (libraries  vg_text vg.pdf))
