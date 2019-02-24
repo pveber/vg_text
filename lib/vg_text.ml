@@ -80,23 +80,25 @@ module Font = struct
     let m = try Gmap.find g0 acc with Not_found -> Gmap.empty in
     Gmap.add g0 (Gmap.add g1 kv m) acc
 
-  let load fn =
+  let load_from_string raw =
+    let d = Otfm.decoder (`String raw) in
+    let r =
+      Otfm.postscript_name d                      >>= fun font_name ->
+      Otfm.head d                                 >>= fun head ->
+      Otfm.cmap d add_cmap Cmap.empty             >>= fun (_, cmap) ->
+      Otfm.hmtx d add_adv Gmap.empty              >>= fun advs ->
+      Otfm.kern d add_ktable add_kpair Gmap.empty >>= fun kern ->
+      Otfm.hhea d                                 >>= fun hhea ->
+      let font_name = match font_name with None -> "Unknown" | Some n -> n in
+      let units_per_em = head.Otfm.head_units_per_em in
+      Ok { font_name ; raw; cmap; advs; kern; hhea ; units_per_em }
+    in
+    (r : (_, Otfm.error) result :> (_, [> Otfm.error]) result)
+
+  let load_from_file fn =
     match string_of_file fn with
     | Error _ as e -> e
-    | Ok raw ->
-      let d = Otfm.decoder (`String raw) in
-      let r =
-        Otfm.postscript_name d                      >>= fun font_name ->
-        Otfm.head d                                 >>= fun head ->
-        Otfm.cmap d add_cmap Cmap.empty             >>= fun (_, cmap) ->
-        Otfm.hmtx d add_adv Gmap.empty              >>= fun advs ->
-        Otfm.kern d add_ktable add_kpair Gmap.empty >>= fun kern ->
-        Otfm.hhea d                                 >>= fun hhea ->
-        let font_name = match font_name with None -> "Unknown" | Some n -> n in
-        let units_per_em = head.Otfm.head_units_per_em in
-        Ok { font_name ; raw; cmap; advs; kern; hhea ; units_per_em }
-      in
-      (r : (_, Otfm.error) result :> (_, [> Otfm.error]) result)
+    | Ok raw -> load_from_string raw
 end
 
 let get_glyph fi g = try Gmap.find g fi.Font.cmap with Not_found -> 0

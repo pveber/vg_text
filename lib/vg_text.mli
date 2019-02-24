@@ -9,8 +9,13 @@ module Font : sig
   val ascender : t -> float
   val descender : t -> float
 
-  val load : string -> (t,
-                        [> Otfm.error | `Read_error of string]) result
+  val load_from_string :
+    string ->
+    (t, [> Otfm.error | `Read_error of string]) result
+
+  val load_from_file :
+    string ->
+    (t, [> Otfm.error | `Read_error of string]) result
 end
 
 (** [cut ?col ?size font text] returns an image displaying [text] with
