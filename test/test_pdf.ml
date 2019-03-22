@@ -30,7 +30,7 @@ let render_pdf font_info renderable =
   Ok ()
 
 let echo font size text =
-  Vg_text.Font.load font >>= fun font ->
+  Vg_text.Font.load_from_file font >>= fun font ->
   let i, bbox = Vg_text.cut ~size font text in
   render_pdf font (`Image (Box2.size bbox, bbox, i))
 
